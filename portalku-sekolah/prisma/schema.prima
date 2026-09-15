@@ -1,0 +1,237 @@
+// Prisma Schema - Aplikasi Sekolah Demo
+// SD Negeri Harapan Bangsa
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  KEPALA_SEKOLAH
+  GURU
+  ORANG_TUA
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          Role      @default(ORANG_TUA)
+  phone         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  teacher       Teacher?
+  parent        Parent?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Teacher {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  nip       String?  @unique
+  subject   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classes   Class[]  @relation("TeacherClasses")
+  materials Material[]
+  attendances Attendance[]
+
+  @@map("teachers")
+}
+
+model Parent {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students  Student[]
+
+  @@map("parents")
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  name        String
+  nis         String?  @unique
+  classId     String?
+  parentId    String?
+  dateOfBirth DateTime?
+  gender      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  class       Class?   @relation(fields: [classId], references: [id])
+  parent      Parent?  @relation(fields: [parentId], references: [id])
+  attendances Attendance[]
+  grades      Grade[]
+
+  @@map("students")
+}
+
+model Class {
+  id        String   @id @default(cuid())
+  name      String   // e.g. "1A", "2B"
+  grade     Int      // 1-6 for SD
+  year      String   // e.g. "2025/2026"
+  teacherId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher   Teacher? @relation("TeacherClasses", fields: [teacherId], references: [id])
+  students  Student[]
+  materials Material[]
+  schedules Schedule[]
+
+  @@map("classes")
+}
+
+model Material {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        String   // document, video, link
+  url         String?
+  filePath    String?
+  subject     String?
+  classId     String?
+  teacherId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  class       Class?   @relation(fields: [classId], references: [id])
+  teacher     Teacher? @relation(fields: [teacherId], references: [id])
+
+  @@map("materials")
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  studentId String
+  teacherId String?
+  date      DateTime @db.Date
+  status    String   // HADIR, IZIN, SAKIT, ALPHA
+  note      String?
+  createdAt DateTime @default(now())
+
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher   Teacher? @relation(fields: [teacherId], references: [id])
+
+  @@unique([studentId, date])
+  @@map("attendances")
+}
+
+model Grade {
+  id        String   @id @default(cuid())
+  studentId String
+  subject   String
+  score     Float
+  type      String   // UH, UTS, UAS, TUGAS
+  semester  String
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("grades")
+}
+
+model Schedule {
+  id        String   @id @default(cuid())
+  classId   String
+  day       String   // SENIN, SELASA, ...
+  startTime String
+  endTime   String
+  subject   String
+  room      String?
+  createdAt DateTime @default(now())
+
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@map("schedules")
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.Text
+  target    String   // ALL, GURU, ORANG_TUA, CLASS
+  classId   String?
+  authorId  String?
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("announcements")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // INFO, WARNING, SUCCESS
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
